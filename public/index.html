@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Study Playlist Finder</title>
+
+  <style>
+    body{
+      margin:0;
+      font-family:Arial;
+      background:linear-gradient(135deg,#0f0f0f,#1a1a2e);
+      color:white;
+      text-align:center;
+    }
+
+    h1{
+      margin-top:40px;
+      font-size:42px;
+      background:linear-gradient(90deg,#00f5ff,#ff00c8);
+      background-clip:text;
+      -webkit-background-clip:text;
+      color:transparent;
+    }
+
+    .search-box{
+      margin-top:30px;
+    }
+
+    input, select{
+      padding:14px;
+      width:220px;
+      border-radius:30px;
+      border:none;
+      outline:none;
+      font-size:16px;
+      margin:5px;
+    }
+
+    button{
+      padding:14px 25px;
+      border-radius:30px;
+      border:none;
+      margin-left:10px;
+      background:linear-gradient(90deg,#00f5ff,#ff00c8);
+      color:white;
+      font-weight:bold;
+      cursor:pointer;
+      transition:.3s;
+    }
+
+    button:hover{
+      transform:scale(1.05);
+      opacity:.9;
+    }
+
+    h2{
+      margin-top:50px;
+      font-size:28px;
+      color:#00f5ff;
+    }
+
+    h3{
+      margin-top:40px;
+      color:#ff00c8;
+    }
+
+    .roadmap-row{
+      display:grid;
+      grid-template-columns:repeat(auto-fit,minmax(300px,1fr));
+      gap:20px;
+      padding:20px 40px;
+    }
+
+    .video-card{
+      background:#111;
+      border-radius:20px;
+      padding:15px;
+      box-shadow:0 0 15px rgba(0,255,255,.2);
+      transition:.3s;
+      text-align:left;
+    }
+
+    .video-card:hover{
+      transform:translateY(-6px);
+      box-shadow:0 0 25px rgba(255,0,200,.5);
+    }
+
+    iframe{
+      border-radius:15px;
+      width:100%;
+      height:200px;
+      margin-top:10px;
+    }
+
+    .title{
+      font-size:16px;
+      margin-bottom:6px;
+      color:#00f5ff;
+    }
+
+    .meta{
+      font-size:13px;
+      color:#aaa;
+      margin-bottom:8px;
+    }
+
+    .progress{
+      margin-bottom:8px;
+      font-size:13px;
+    }
+  </style>
+</head>
+
+<body>
+
+<h1>📚 Study Playlist Finder</h1>
+
+<div class="search-box">
+  <input id="topic" placeholder="Search topic..." />
+
+  <select id="level">
+    <option value="all">All Levels</option>
+    <option value="beginner">Beginner</option>
+    <option value="advanced">Advanced</option>
+  </select>
+
+  <button onclick="search()">Search</button>
+</div>
+
+<div id="roadmap"></div>
+
+<script>
+/* ---------------- STORAGE ---------------- */
+
+function getProgress(){
+  return JSON.parse(localStorage.getItem("progress") || "{}");
+}
+
+function setProgress(data){
+  localStorage.setItem("progress", JSON.stringify(data));
+}
+
+function toggleProgress(id){
+  const progress = getProgress();
+  progress[id] = !progress[id];
+  setProgress(progress);
+  renderLastCourse(); // re-render UI
+}
+
+function isDone(id){
+  return getProgress()[id] === true;
+}
+
+function savePlaylist(topic, videos){
+  localStorage.setItem("playlist_topic", topic);
+  localStorage.setItem("playlist_videos", JSON.stringify(videos));
+}
+
+function loadPlaylist(){
+  const topic = localStorage.getItem("playlist_topic");
+  const videos = JSON.parse(localStorage.getItem("playlist_videos") || "[]");
+
+  if(topic && videos.length){
+    renderCourse(topic, videos);
+  }
+}
+
+/* ---------------- EXPORT ---------------- */
+
+function exportPlaylist(){
+  const topic = localStorage.getItem("playlist_topic");
+  const videos = localStorage.getItem("playlist_videos");
+
+  if(!videos) return alert("No playlist saved");
+
+  const blob = new Blob([videos], {type:"application/json"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = topic + "_playlist.json";
+  a.click();
+}
+
+/* ---------------- SEARCH ---------------- */
+
+async function search(){
+  const topic = document.getElementById("topic").value.trim();
+  const level = document.getElementById("level").value;
+
+  if(!topic) return;
+
+  const res = await fetch(`/search?q=${topic}&level=${level}`);
+  const data = await res.json();
+
+  if(!data.videos || data.videos.length === 0){
+    document.getElementById("roadmap").innerHTML = "<h2>No videos found.</h2>";
+    return;
+  }
+
+  savePlaylist(topic, data.videos);
+  renderCourse(topic, data.videos);
+}
+
+/* ---------------- RENDER COURSE ---------------- */
+
+function renderCourse(topic, videos){
+  const roadmapDiv = document.getElementById("roadmap");
+  roadmapDiv.innerHTML = "";
+
+  const progress = getProgress();
+  const completedCount = videos.filter(v => progress[v.id]).length;
+  const percent = Math.round((completedCount / videos.length) * 100);
+
+  roadmapDiv.innerHTML = `
+    <h2>🧠 ${topic} Course</h2>
+
+    <div style="margin:20px;font-size:14px">
+      Progress: ${completedCount}/${videos.length} (${percent}%)
+      <div style="background:#222;height:10px;border-radius:10px;margin-top:6px">
+        <div style="width:${percent}%;height:10px;background:#00f5ff;border-radius:10px"></div>
+      </div>
+    </div>
+
+    <button onclick="exportPlaylist()">Export Playlist</button>
+
+    <h3>Step 1 → Foundation</h3>
+    <div id="step1" class="roadmap-row"></div>
+
+    <h3>Step 2 → Core</h3>
+    <div id="step2" class="roadmap-row"></div>
+
+    <h3>Step 3 → Advanced</h3>
+    <div id="step3" class="roadmap-row"></div>
+  `;
+
+  const step1 = document.getElementById("step1");
+  const step2 = document.getElementById("step2");
+  const step3 = document.getElementById("step3");
+
+  videos.forEach((v, i)=>{
+    const done = isDone(v.id);
+    const badge = done ? "✔ Completed" : "";
+
+    const card = `
+      <div class="video-card">
+        <div class="title">${v.title}</div>
+        <div class="meta">${v.channel} • ${v.level}</div>
+
+        <label style="font-size:13px">
+          <input type="checkbox" ${done?"checked":""}
+            onchange="toggleProgress('${v.id}')">
+          Mark complete
+        </label>
+
+        <div style="color:#00f5ff;font-size:12px">${badge}</div>
+
+        <iframe src="https://www.youtube.com/embed/${v.id}" allowfullscreen></iframe>
+      </div>
+    `;
+
+    if(i<2) step1.innerHTML+=card;
+    else if(i<4) step2.innerHTML+=card;
+    else step3.innerHTML+=card;
+  });
+}
+
+/* ---------------- RESUME ---------------- */
+
+function renderLastCourse(){
+  const topic = localStorage.getItem("playlist_topic");
+  const videos = JSON.parse(localStorage.getItem("playlist_videos") || "[]");
+
+  if(topic && videos.length){
+    renderCourse(topic, videos);
+  }
+}
+
+window.onload = loadPlaylist;
+</script>
+
+</body>
+</html>
